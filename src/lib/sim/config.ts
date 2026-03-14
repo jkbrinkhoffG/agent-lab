@@ -31,6 +31,13 @@ export const DEFAULT_CONFIG: LabConfig = {
     epsilonDecay: 0.994,
     minEpsilon: 0.05,
   },
+  pg: {
+    learningRate: 0.002,
+    discountFactor: 0.99,
+    hiddenSize: 16,
+    entropyBonus: 0.01,
+  },
+  environmentId: "grid-nav",
 };
 
 export const ACTIONS = ["up", "down", "left", "right", "stay"] as const;

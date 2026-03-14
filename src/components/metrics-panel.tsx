@@ -23,11 +23,19 @@ import type {
   EpisodeMetrics,
   EventLogEntry,
   GenerationMetrics,
+  PGProgressPoint,
   QLearningProgressPoint,
   WorldState,
 } from "@/lib/sim/types";
 import type { AgentDecision } from "@/lib/agents/base";
 import type { QRuntime } from "@/lib/trainers/q-learning-trainer";
+import type { PGRuntime } from "@/lib/trainers/policy-gradient-trainer";
+
+const TOOLTIP_STYLE = {
+  background: "#0f172a",
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 16,
+};
 
 interface MetricsPanelProps {
   mode: AgentMode;
@@ -35,9 +43,11 @@ interface MetricsPanelProps {
   episodeMetrics: EpisodeMetrics[];
   generationMetrics: GenerationMetrics[];
   qLearningMetrics: QLearningProgressPoint[];
+  pgMetrics: PGProgressPoint[];
   logs: EventLogEntry[];
   lastDecision: AgentDecision | null;
   qRuntime: QRuntime;
+  pgRuntime: PGRuntime;
 }
 
 export function MetricsPanel({
@@ -46,12 +56,15 @@ export function MetricsPanel({
   episodeMetrics,
   generationMetrics,
   qLearningMetrics,
+  pgMetrics,
   logs,
   lastDecision,
   qRuntime,
+  pgRuntime,
 }: MetricsPanelProps) {
   const rewardMetrics = episodeMetrics.slice(-20);
   const qProgressMetrics = qLearningMetrics.slice(-40);
+  const pgProgressMetrics = pgMetrics.slice(-40);
   const actionScores = Object.entries(lastDecision?.scores ?? {}).map(([action, score]) => ({
     action,
     score,
@@ -66,6 +79,15 @@ export function MetricsPanel({
     recentQWindow.reduce((sum, metric) => sum + metric.reward, 0) /
     Math.max(1, recentQWindow.length);
 
+  const bestPGReward = pgMetrics.reduce(
+    (best, metric) => Math.max(best, metric.reward),
+    Number.NEGATIVE_INFINITY,
+  );
+  const recentPGWindow = pgMetrics.slice(-10);
+  const recentPGAverage =
+    recentPGWindow.reduce((sum, metric) => sum + metric.reward, 0) /
+    Math.max(1, recentPGWindow.length);
+
   return (
     <div className="space-y-4">
       <Panel subtitle="Fast readout of what the agent is seeing and doing." title="Metrics">
@@ -74,7 +96,13 @@ export function MetricsPanel({
           <StatCard label="Food collected" value={String(world.collectedFood)} />
           <StatCard label="Hazard adjacent" value={String(world.observation.hazardAdjacent)} />
           <StatCard
-            hint={mode === "q-learning" ? `Episodes ${qRuntime.episodes}` : undefined}
+            hint={
+              mode === "q-learning"
+                ? `Episodes ${qRuntime.episodes}`
+                : mode === "policy-gradient"
+                  ? `Episodes ${pgRuntime.episodes}`
+                  : undefined
+            }
             label="Steps remaining"
             value={formatNumber(world.observation.stepsRemaining * 100, 0) + "%"}
           />
@@ -121,13 +149,7 @@ export function MetricsPanel({
                   <CartesianGrid opacity={0.08} vertical={false} />
                   <XAxis dataKey="action" stroke="#64748b" />
                   <YAxis stroke="#64748b" />
-                  <Tooltip
-                    contentStyle={{
-                      background: "#0f172a",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                      borderRadius: 16,
-                    }}
-                  />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
                   <Bar dataKey="score" fill="#38bdf8" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -144,13 +166,7 @@ export function MetricsPanel({
                 <CartesianGrid opacity={0.08} vertical={false} />
                 <XAxis dataKey="episode" stroke="#64748b" />
                 <YAxis stroke="#64748b" />
-                <Tooltip
-                  contentStyle={{
-                    background: "#0f172a",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    borderRadius: 16,
-                  }}
-                />
+                <Tooltip contentStyle={TOOLTIP_STYLE} />
                 <Legend />
                 <Line
                   dataKey="reward"
@@ -178,13 +194,7 @@ export function MetricsPanel({
                 <CartesianGrid opacity={0.08} vertical={false} />
                 <XAxis dataKey="generation" stroke="#64748b" />
                 <YAxis stroke="#64748b" />
-                <Tooltip
-                  contentStyle={{
-                    background: "#0f172a",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    borderRadius: 16,
-                  }}
-                />
+                <Tooltip contentStyle={TOOLTIP_STYLE} />
                 <Area
                   dataKey="averageFitness"
                   fill="rgba(56, 189, 248, 0.15)"
@@ -225,9 +235,7 @@ export function MetricsPanel({
               <StatCard
                 hint="Best single Q-learning episode reward so far"
                 label="Best reward"
-                value={formatNumber(
-                  Number.isFinite(bestQReward) ? bestQReward : 0,
-                )}
+                value={formatNumber(Number.isFinite(bestQReward) ? bestQReward : 0)}
               />
               <StatCard
                 hint="Average reward over the last 10 Q-learning episodes"
@@ -242,13 +250,7 @@ export function MetricsPanel({
                   <CartesianGrid opacity={0.08} vertical={false} />
                   <XAxis dataKey="episode" stroke="#64748b" />
                   <YAxis stroke="#64748b" />
-                  <Tooltip
-                    contentStyle={{
-                      background: "#0f172a",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                      borderRadius: 16,
-                    }}
-                  />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
                   <Legend />
                   <Line
                     dataKey="reward"
@@ -277,13 +279,7 @@ export function MetricsPanel({
                   <XAxis dataKey="episode" stroke="#64748b" />
                   <YAxis domain={[0, 1]} stroke="#64748b" yAxisId="left" />
                   <YAxis orientation="right" stroke="#64748b" yAxisId="right" />
-                  <Tooltip
-                    contentStyle={{
-                      background: "#0f172a",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                      borderRadius: 16,
-                    }}
-                  />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
                   <Legend />
                   <Line
                     dataKey="epsilon"
@@ -302,6 +298,86 @@ export function MetricsPanel({
                     strokeWidth={2}
                     type="monotone"
                     yAxisId="right"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </Panel>
+      )}
+
+      {mode === "policy-gradient" && (
+        <Panel
+          subtitle="Episode reward trend and return estimates for the REINFORCE policy gradient agent."
+          title="Policy Gradient Progress"
+        >
+          <div className="space-y-4">
+            <div className="grid gap-3 xl:grid-cols-2">
+              <StatCard
+                hint="Total REINFORCE training episodes completed"
+                label="Episodes"
+                value={String(pgRuntime.episodes)}
+              />
+              <StatCard
+                hint="Best single policy gradient episode reward so far"
+                label="Best reward"
+                value={formatNumber(Number.isFinite(bestPGReward) ? bestPGReward : 0)}
+              />
+              <StatCard
+                hint="Average reward over the last 10 PG episodes"
+                label="Recent avg"
+                value={formatNumber(recentPGAverage)}
+              />
+              <StatCard
+                hint="Network hidden layer size"
+                label="Network size"
+                value={`9 → ${pgRuntime.network.b1.length} → 5`}
+              />
+            </div>
+
+            <div className="h-48">
+              <ResponsiveContainer height="100%" width="100%">
+                <LineChart data={pgProgressMetrics}>
+                  <CartesianGrid opacity={0.08} vertical={false} />
+                  <XAxis dataKey="episode" stroke="#64748b" />
+                  <YAxis stroke="#64748b" />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
+                  <Legend />
+                  <Line
+                    dataKey="reward"
+                    dot={false}
+                    name="Episode reward"
+                    stroke="#38bdf8"
+                    strokeWidth={2}
+                    type="monotone"
+                  />
+                  <Line
+                    dataKey="movingAverage"
+                    dot={false}
+                    name="10-episode avg"
+                    stroke="#a3e635"
+                    strokeWidth={2}
+                    type="monotone"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="h-48">
+              <ResponsiveContainer height="100%" width="100%">
+                <LineChart data={pgProgressMetrics}>
+                  <CartesianGrid opacity={0.08} vertical={false} />
+                  <XAxis dataKey="episode" stroke="#64748b" />
+                  <YAxis stroke="#64748b" />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
+                  <Legend />
+                  <Line
+                    dataKey="returnEstimate"
+                    dot={false}
+                    name="Episode return"
+                    stroke="#f59e0b"
+                    strokeWidth={2}
+                    type="monotone"
                   />
                 </LineChart>
               </ResponsiveContainer>

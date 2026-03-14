@@ -3,7 +3,8 @@ export type AgentMode =
   | "random"
   | "heuristic"
   | "evolution"
-  | "q-learning";
+  | "q-learning"
+  | "policy-gradient";
 
 export type DiscreteAction = "up" | "down" | "left" | "right" | "stay";
 
@@ -45,12 +46,21 @@ export interface RLConfig {
   minEpsilon: number;
 }
 
+export interface PGConfig {
+  learningRate: number;
+  discountFactor: number;
+  hiddenSize: number;
+  entropyBonus: number;
+}
+
 export interface LabConfig {
   mode: AgentMode;
   tickMs: number;
   environment: EnvironmentConfig;
   evolution: EvolutionConfig;
   rl: RLConfig;
+  pg: PGConfig;
+  environmentId: string;
 }
 
 export interface Observation {
@@ -78,6 +88,7 @@ export interface WorldState {
   tick: number;
   agent: Vec2;
   food: Vec2;
+  foodItems?: Vec2[];
   hazards: Vec2[];
   totalReward: number;
   score: number;
@@ -94,6 +105,7 @@ export interface ReplayFrame {
   tick: number;
   agent: Vec2;
   food: Vec2;
+  foodItems?: Vec2[];
   hazards: Vec2[];
   action: DiscreteAction;
   reward: number;
@@ -145,10 +157,30 @@ export interface GenerationMetrics {
   averageFitness: number;
 }
 
+export interface PGProgressPoint {
+  episode: number;
+  reward: number;
+  movingAverage: number;
+  score: number;
+  steps: number;
+  returnEstimate: number;
+}
+
 export interface EventLogEntry {
   id: string;
   tick: number;
   title: string;
   detail: string;
   tone: "info" | "good" | "bad";
+}
+
+export interface SavedLabState {
+  version: 1;
+  label: string;
+  savedAt: number;
+  config: LabConfig;
+  qValues: Record<string, number[]>;
+  population: Array<{ id: string; weights: number[][]; biases: number[] }>;
+  episodeMetrics: EpisodeMetrics[];
+  generationMetrics: GenerationMetrics[];
 }

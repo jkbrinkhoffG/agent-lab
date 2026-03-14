@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BrainCircuit, PauseCircle, PlayCircle, RotateCcw, SkipForward } from "lucide-react";
+import { BrainCircuit, Columns2, PauseCircle, PlayCircle, RotateCcw, SkipForward } from "lucide-react";
 
 import { cn, formatNumber } from "@/lib/utils";
 import type { AgentMode, WorldState } from "@/lib/sim/types";
@@ -17,10 +17,12 @@ interface LabHeaderProps {
     candidate: number | null;
     populationSize: number | null;
   };
+  showComparison: boolean;
   onToggleRun: () => void;
   onStep: () => void;
   onReset: () => void;
   wikiHref: string;
+  onToggleComparison: () => void;
 }
 
 const modeLabels: Record<AgentMode, string> = {
@@ -29,6 +31,7 @@ const modeLabels: Record<AgentMode, string> = {
   heuristic: "Heuristic baseline",
   evolution: "Evolution lab",
   "q-learning": "Q-learning lab",
+  "policy-gradient": "Policy Gradient lab",
 };
 
 export function LabHeader({
@@ -37,10 +40,12 @@ export function LabHeader({
   runStatus,
   world,
   progress,
+  showComparison,
   onToggleRun,
   onStep,
   onReset,
   wikiHref,
+  onToggleComparison,
 }: LabHeaderProps) {
   return (
     <header className="rounded-[28px] border border-white/12 bg-slate-950/60 p-4 shadow-panel backdrop-blur-xl">
@@ -140,6 +145,19 @@ export function LabHeader({
         >
           <RotateCcw className="h-4 w-4" />
           Reset
+        </button>
+        <button
+          className={cn(
+            "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition",
+            showComparison
+              ? "border-accent-400 bg-accent-500/10 text-accent-200"
+              : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10",
+          )}
+          onClick={onToggleComparison}
+          type="button"
+        >
+          <Columns2 className="h-4 w-4" />
+          Compare
         </button>
       </div>
     </header>
