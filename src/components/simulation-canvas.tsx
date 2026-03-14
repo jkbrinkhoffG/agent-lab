@@ -91,6 +91,27 @@ export function SimulationCanvas({ world, history = [], className }: SimulationC
       context.fill();
     });
 
+    // Render secondary food items (multi-food env) in dimmer green
+    if (world.foodItems && world.foodItems.length > 1) {
+      world.foodItems.forEach((item) => {
+        const isNearest =
+          item.x === world.food.x && item.y === world.food.y;
+        if (!isNearest) {
+          context.fillStyle = "rgba(132, 204, 22, 0.45)";
+          context.beginPath();
+          context.arc(
+            item.x * cellSize + cellSize / 2,
+            item.y * cellSize + cellSize / 2,
+            cellSize * 0.18,
+            0,
+            Math.PI * 2,
+          );
+          context.fill();
+        }
+      });
+    }
+
+    // Primary / nearest food in bright green
     context.fillStyle = "#84cc16";
     context.beginPath();
     context.arc(

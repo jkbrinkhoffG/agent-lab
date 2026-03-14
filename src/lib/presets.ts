@@ -73,5 +73,9 @@ export function mergePreset<T extends LabConfig>(base: T, patch: DeepPartial<Lab
       ...base.rl,
       ...patch.rl,
     },
+    pg: {
+      ...base.pg,
+      ...patch.pg,
+    },
   };
 }

@@ -1,18 +1,20 @@
 "use client";
 
-import type { ChangeEvent } from "react";
-import { FlaskConical, SlidersHorizontal, Sparkles } from "lucide-react";
+import { useRef, type ChangeEvent } from "react";
+import { Download, FlaskConical, FolderOpen, Save, SlidersHorizontal, Sparkles, Trash2 } from "lucide-react";
 
 import { Panel } from "@/components/panel";
 import { LAB_PRESETS } from "@/lib/presets";
+import { ENVIRONMENTS } from "@/lib/environments/index";
 import { cn, formatNumber } from "@/lib/utils";
-import type { AgentMode, LabConfig } from "@/lib/sim/types";
+import type { AgentMode, LabConfig, SavedLabState } from "@/lib/sim/types";
 
 interface ControlsPanelProps {
   config: LabConfig;
   trainerView: "evaluate" | "train";
   manualAction: string;
   selectedPresetId: string;
+  savedSlots: SavedLabState[];
   onApplyPreset: (presetId: string) => void;
   onSetMode: (mode: AgentMode) => void;
   onSetTrainerView: (view: "evaluate" | "train") => void;
@@ -33,7 +35,17 @@ interface ControlsPanelProps {
     key: K,
     value: LabConfig["rl"][K],
   ) => void;
-  onManualAction: (action: AgentMode extends never ? never : "up" | "down" | "left" | "right" | "stay") => void;
+  onUpdatePG: <K extends keyof LabConfig["pg"]>(
+    key: K,
+    value: LabConfig["pg"][K],
+  ) => void;
+  onUpdateEnvironmentId: (id: string) => void;
+  onManualAction: (action: "up" | "down" | "left" | "right" | "stay") => void;
+  onSaveState: (label: string) => void;
+  onLoadState: (saved: SavedLabState) => void;
+  onDownloadState: () => void;
+  onImportStateFromFile: (file: File) => void;
+  onDeleteSavedSlot: (savedAt: number) => void;
 }
 
 function SectionTitle({ icon: Icon, title }: { icon: typeof FlaskConical; title: string }) {
@@ -115,6 +127,7 @@ export function ControlsPanel({
   trainerView,
   manualAction,
   selectedPresetId,
+  savedSlots,
   onApplyPreset,
   onSetMode,
   onSetTrainerView,
@@ -123,9 +136,18 @@ export function ControlsPanel({
   onUpdateReward,
   onUpdateEvolution,
   onUpdateRL,
+  onUpdatePG,
+  onUpdateEnvironmentId,
   onManualAction,
+  onSaveState,
+  onLoadState,
+  onDownloadState,
+  onImportStateFromFile,
+  onDeleteSavedSlot,
 }: ControlsPanelProps) {
-  const modes: AgentMode[] = ["manual", "random", "heuristic", "evolution", "q-learning"];
+  const modes: AgentMode[] = ["manual", "random", "heuristic", "evolution", "q-learning", "policy-gradient"];
+  const saveLabelRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   return (
     <div className="space-y-4">
@@ -172,11 +194,13 @@ export function ControlsPanel({
                   onClick={() => onSetMode(mode)}
                   type="button"
                 >
-                  {mode}
+                  {mode === "policy-gradient" ? "PG" : mode}
                 </button>
               ))}
             </div>
-            {(config.mode === "evolution" || config.mode === "q-learning") && (
+            {(config.mode === "evolution" ||
+              config.mode === "q-learning" ||
+              config.mode === "policy-gradient") && (
               <div className="mt-3 flex rounded-full border border-white/10 bg-slate-950/70 p-1">
                 {(["evaluate", "train"] as const).map((view) => (
                   <button
@@ -222,6 +246,24 @@ export function ControlsPanel({
 
           <div className="space-y-3">
             <SectionTitle icon={FlaskConical} title="Environment" />
+            <div className="grid grid-cols-3 gap-2">
+              {ENVIRONMENTS.map((env) => (
+                <button
+                  className={cn(
+                    "rounded-2xl border px-2 py-2 text-xs font-medium transition",
+                    config.environmentId === env.id
+                      ? "border-accent-400 bg-accent-500/10 text-white"
+                      : "border-white/8 bg-slate-950/50 text-slate-300 hover:bg-white/[0.04]",
+                  )}
+                  key={env.id}
+                  onClick={() => onUpdateEnvironmentId(env.id)}
+                  title={env.description}
+                  type="button"
+                >
+                  {env.label}
+                </button>
+              ))}
+            </div>
             <NumberField
               label="Seed"
               max={9999}
@@ -407,6 +449,125 @@ export function ControlsPanel({
               />
             </div>
           )}
+
+          {config.mode === "policy-gradient" && (
+            <div className="space-y-3">
+              <SectionTitle icon={FlaskConical} title="Policy Gradient" />
+              <RangeField
+                label="Learning rate"
+                max={0.05}
+                min={0.0001}
+                onChange={(value) => onUpdatePG("learningRate", value)}
+                step={0.0001}
+                value={config.pg.learningRate}
+              />
+              <RangeField
+                label="Discount factor"
+                max={0.999}
+                min={0.8}
+                onChange={(value) => onUpdatePG("discountFactor", value)}
+                step={0.001}
+                value={config.pg.discountFactor}
+              />
+              <RangeField
+                label="Hidden size"
+                max={64}
+                min={8}
+                onChange={(value) => onUpdatePG("hiddenSize", value)}
+                step={8}
+                value={config.pg.hiddenSize}
+              />
+              <RangeField
+                label="Entropy bonus"
+                max={0.1}
+                min={0}
+                onChange={(value) => onUpdatePG("entropyBonus", value)}
+                step={0.005}
+                value={config.pg.entropyBonus}
+              />
+            </div>
+          )}
+
+          <div className="space-y-3">
+            <SectionTitle icon={Save} title="Save / Load" />
+            <div className="flex gap-2">
+              <input
+                className="flex-1 rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white placeholder-slate-600 outline-none focus:border-accent-400"
+                placeholder="Save label…"
+                ref={saveLabelRef}
+                type="text"
+              />
+              <button
+                className="inline-flex items-center gap-1 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 transition hover:bg-white/10"
+                onClick={() => onSaveState(saveLabelRef.current?.value ?? "")}
+                title="Save to local slot"
+                type="button"
+              >
+                <Save className="h-4 w-4" />
+              </button>
+              <button
+                className="inline-flex items-center gap-1 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 transition hover:bg-white/10"
+                onClick={onDownloadState}
+                title="Download as JSON"
+                type="button"
+              >
+                <Download className="h-4 w-4" />
+              </button>
+            </div>
+            <div>
+              <input
+                accept=".json"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) onImportStateFromFile(file);
+                  e.target.value = "";
+                }}
+                ref={fileInputRef}
+                type="file"
+              />
+              <button
+                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 transition hover:bg-white/10"
+                onClick={() => fileInputRef.current?.click()}
+                type="button"
+              >
+                <FolderOpen className="h-4 w-4" />
+                Import from file
+              </button>
+            </div>
+            {savedSlots.length > 0 && (
+              <div className="space-y-2">
+                {savedSlots.map((slot) => (
+                  <div
+                    className="flex items-center gap-2 rounded-2xl border border-white/8 bg-slate-950/60 px-3 py-2"
+                    key={slot.savedAt}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-white">{slot.label}</p>
+                      <p className="text-xs text-slate-500">
+                        {new Date(slot.savedAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <button
+                      className="shrink-0 rounded-xl border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-200 transition hover:bg-white/10"
+                      onClick={() => onLoadState(slot)}
+                      type="button"
+                    >
+                      Load
+                    </button>
+                    <button
+                      className="shrink-0 rounded-xl border border-white/10 bg-white/5 p-1 text-slate-500 transition hover:text-rose-400"
+                      onClick={() => onDeleteSavedSlot(slot.savedAt)}
+                      title="Delete save"
+                      type="button"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </Panel>
     </div>

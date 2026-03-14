@@ -1,15 +1,16 @@
-import { createSeededRandom, hashSeed, type RandomSource } from "@/lib/random";
+// Grid Navigation environment — single food target, random hazards.
+// This is the original environment extracted into the pluggable registry format.
+
+import { createSeededRandom, hashSeed } from "@/lib/random";
 import { clamp } from "@/lib/utils";
 import type {
   DiscreteAction,
   EnvironmentConfig,
   Observation,
-  ReplayFrame,
   RewardBreakdown,
   Vec2,
   WorldState,
 } from "@/lib/sim/types";
-import { getEnvironment } from "@/lib/environments/index";
 
 const ACTION_VECTORS: Record<DiscreteAction, Vec2> = {
   up: { x: 0, y: -1 },
@@ -27,7 +28,11 @@ function distance(a: Vec2, b: Vec2) {
   return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 }
 
-function randomPosition(config: EnvironmentConfig, rng: RandomSource, taken: Vec2[] = []) {
+export function randomPosition(
+  config: EnvironmentConfig,
+  rng: ReturnType<typeof createSeededRandom>,
+  taken: Vec2[] = [],
+) {
   const maxAttempts = config.gridWidth * config.gridHeight * 2;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
@@ -42,10 +47,6 @@ function randomPosition(config: EnvironmentConfig, rng: RandomSource, taken: Vec
   }
 
   return { x: 0, y: 0 };
-}
-
-export function createEpisodeRandom(config: EnvironmentConfig, episodeIndex: number) {
-  return createSeededRandom(hashSeed(config.seed, episodeIndex + 1));
 }
 
 export function buildObservation(
@@ -76,18 +77,11 @@ export function buildObservation(
 }
 
 function createRewardBreakdown(): RewardBreakdown {
-  return {
-    food: 0,
-    hazard: 0,
-    step: 0,
-    shaping: 0,
-    boundary: 0,
-    total: 0,
-  };
+  return { food: 0, hazard: 0, step: 0, shaping: 0, boundary: 0, total: 0 };
 }
 
-export function resetWorld(config: EnvironmentConfig, episodeIndex: number): WorldState {
-  const rng = createEpisodeRandom(config, episodeIndex);
+export function gridNavReset(config: EnvironmentConfig, episodeIndex: number): WorldState {
+  const rng = createSeededRandom(hashSeed(config.seed, episodeIndex + 1));
   const agent = randomPosition(config, rng);
   const food = randomPosition(config, rng, [agent]);
   const hazards = Array.from({ length: config.hazardCount }, () =>
@@ -112,56 +106,13 @@ export function resetWorld(config: EnvironmentConfig, episodeIndex: number): Wor
   };
 }
 
-export function availableActions(config: EnvironmentConfig): DiscreteAction[] {
-  return config.allowStayAction
-    ? ["up", "down", "left", "right", "stay"]
-    : ["up", "down", "left", "right"];
-}
-
-export function worldToFrame(state: WorldState): ReplayFrame {
-  return {
-    tick: state.tick,
-    agent: { ...state.agent },
-    food: { ...state.food },
-    foodItems: state.foodItems ? state.foodItems.map((f) => ({ ...f })) : undefined,
-    hazards: state.hazards.map((hazard) => ({ ...hazard })),
-    action: state.lastAction,
-    reward: state.lastReward,
-    rewardBreakdown: { ...state.lastRewardBreakdown },
-    totalReward: state.totalReward,
-    observation: { ...state.observation },
-    done: state.done,
-    terminationReason: state.terminationReason,
-    score: state.score,
-    collectedFood: state.collectedFood,
-  };
-}
-
-export function resetWorldForEnv(
-  environmentId: string,
-  config: EnvironmentConfig,
-  episodeIndex: number,
-): WorldState {
-  return getEnvironment(environmentId).reset(config, episodeIndex);
-}
-
-export function stepWorldForEnv(
-  environmentId: string,
-  state: WorldState,
-  action: DiscreteAction,
-  config: EnvironmentConfig,
-  episodeIndex: number,
-): WorldState {
-  return getEnvironment(environmentId).step(state, action, config, episodeIndex);
-}
-
-export function stepWorld(
+export function gridNavStep(
   previous: WorldState,
   action: DiscreteAction,
   config: EnvironmentConfig,
   episodeIndex: number,
 ): WorldState {
-  const rng = createEpisodeRandom(config, episodeIndex * 997 + previous.tick + 1);
+  const rng = createSeededRandom(hashSeed(config.seed, episodeIndex * 997 + previous.tick + 1));
   const delta = ACTION_VECTORS[action];
   const unclampedNext = {
     x: previous.agent.x + delta.x,
@@ -186,7 +137,7 @@ export function stepWorld(
   }
 
   let food = previous.food;
-  let hazards = previous.hazards.map((hazard) => ({ ...hazard }));
+  const hazards = previous.hazards.map((hazard) => ({ ...hazard }));
   let score = previous.score;
   let collectedFood = previous.collectedFood;
   let done = false;
