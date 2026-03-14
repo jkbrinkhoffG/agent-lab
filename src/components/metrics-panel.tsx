@@ -23,6 +23,7 @@ import type {
   EpisodeMetrics,
   EventLogEntry,
   GenerationMetrics,
+  QLearningProgressPoint,
   WorldState,
 } from "@/lib/sim/types";
 import type { AgentDecision } from "@/lib/agents/base";
@@ -33,6 +34,7 @@ interface MetricsPanelProps {
   world: WorldState;
   episodeMetrics: EpisodeMetrics[];
   generationMetrics: GenerationMetrics[];
+  qLearningMetrics: QLearningProgressPoint[];
   logs: EventLogEntry[];
   lastDecision: AgentDecision | null;
   qRuntime: QRuntime;
@@ -43,15 +45,26 @@ export function MetricsPanel({
   world,
   episodeMetrics,
   generationMetrics,
+  qLearningMetrics,
   logs,
   lastDecision,
   qRuntime,
 }: MetricsPanelProps) {
   const rewardMetrics = episodeMetrics.slice(-20);
+  const qProgressMetrics = qLearningMetrics.slice(-40);
   const actionScores = Object.entries(lastDecision?.scores ?? {}).map(([action, score]) => ({
     action,
     score,
   }));
+  const latestQMetric = qLearningMetrics[qLearningMetrics.length - 1] ?? null;
+  const bestQReward = qLearningMetrics.reduce(
+    (best, metric) => Math.max(best, metric.reward),
+    Number.NEGATIVE_INFINITY,
+  );
+  const recentQWindow = qLearningMetrics.slice(-10);
+  const recentQAverage =
+    recentQWindow.reduce((sum, metric) => sum + metric.reward, 0) /
+    Math.max(1, recentQWindow.length);
 
   return (
     <div className="space-y-4">
@@ -191,6 +204,111 @@ export function MetricsPanel({
           </div>
         </div>
       </Panel>
+
+      {mode === "q-learning" && (
+        <Panel
+          subtitle="Reward trend, exploration decay, and visited state growth across Q-learning episodes."
+          title="Q-learning Progress"
+        >
+          <div className="space-y-4">
+            <div className="grid gap-3 xl:grid-cols-2">
+              <StatCard
+                hint={latestQMetric ? `Last: ${latestQMetric.terminationReason ?? "active"}` : undefined}
+                label="Current epsilon"
+                value={formatNumber(qRuntime.epsilon)}
+              />
+              <StatCard
+                hint="Unique discretized observations with learned values"
+                label="Visited states"
+                value={String(Object.keys(qRuntime.qValues).length)}
+              />
+              <StatCard
+                hint="Best single Q-learning episode reward so far"
+                label="Best reward"
+                value={formatNumber(
+                  Number.isFinite(bestQReward) ? bestQReward : 0,
+                )}
+              />
+              <StatCard
+                hint="Average reward over the last 10 Q-learning episodes"
+                label="Recent avg"
+                value={formatNumber(recentQAverage)}
+              />
+            </div>
+
+            <div className="h-48">
+              <ResponsiveContainer height="100%" width="100%">
+                <LineChart data={qProgressMetrics}>
+                  <CartesianGrid opacity={0.08} vertical={false} />
+                  <XAxis dataKey="episode" stroke="#64748b" />
+                  <YAxis stroke="#64748b" />
+                  <Tooltip
+                    contentStyle={{
+                      background: "#0f172a",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      borderRadius: 16,
+                    }}
+                  />
+                  <Legend />
+                  <Line
+                    dataKey="reward"
+                    dot={false}
+                    name="Episode reward"
+                    stroke="#38bdf8"
+                    strokeWidth={2}
+                    type="monotone"
+                  />
+                  <Line
+                    dataKey="movingAverage"
+                    dot={false}
+                    name="10-episode avg"
+                    stroke="#a3e635"
+                    strokeWidth={2}
+                    type="monotone"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="h-48">
+              <ResponsiveContainer height="100%" width="100%">
+                <LineChart data={qProgressMetrics}>
+                  <CartesianGrid opacity={0.08} vertical={false} />
+                  <XAxis dataKey="episode" stroke="#64748b" />
+                  <YAxis domain={[0, 1]} stroke="#64748b" yAxisId="left" />
+                  <YAxis orientation="right" stroke="#64748b" yAxisId="right" />
+                  <Tooltip
+                    contentStyle={{
+                      background: "#0f172a",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      borderRadius: 16,
+                    }}
+                  />
+                  <Legend />
+                  <Line
+                    dataKey="epsilon"
+                    dot={false}
+                    name="Exploration (epsilon)"
+                    stroke="#fb7185"
+                    strokeWidth={2}
+                    type="monotone"
+                    yAxisId="left"
+                  />
+                  <Line
+                    dataKey="stateCount"
+                    dot={false}
+                    name="Visited states"
+                    stroke="#f59e0b"
+                    strokeWidth={2}
+                    type="monotone"
+                    yAxisId="right"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </Panel>
+      )}
 
       <Panel subtitle="High-signal events from the live run." title="Event Log">
         <div className="max-h-[360px] space-y-2 overflow-auto pr-1">

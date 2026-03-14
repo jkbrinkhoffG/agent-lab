@@ -52,6 +52,7 @@ export default function Home() {
           progress={lab.progress}
           runStatus={lab.runStatus}
           trainerView={lab.trainerView}
+          wikiHref="/wiki"
           world={lab.world}
         />
 
@@ -111,6 +112,7 @@ export default function Home() {
             lastDecision={lab.lastDecision}
             logs={lab.logs}
             mode={lab.config.mode}
+            qLearningMetrics={lab.qLearningMetrics}
             qRuntime={lab.qRuntime}
             world={lab.world}
           />

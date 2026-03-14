@@ -127,6 +127,18 @@ export interface EpisodeMetrics {
   movingAverage: number;
 }
 
+export interface QLearningProgressPoint {
+  episode: number;
+  reward: number;
+  movingAverage: number;
+  score: number;
+  steps: number;
+  epsilon: number;
+  stateCount: number;
+  terminationReason: string | null;
+  view: "evaluate" | "train";
+}
+
 export interface GenerationMetrics {
   generation: number;
   bestFitness: number;

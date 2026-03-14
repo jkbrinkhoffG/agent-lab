@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { BrainCircuit, PauseCircle, PlayCircle, RotateCcw, SkipForward } from "lucide-react";
 
 import { cn, formatNumber } from "@/lib/utils";
@@ -19,6 +20,7 @@ interface LabHeaderProps {
   onToggleRun: () => void;
   onStep: () => void;
   onReset: () => void;
+  wikiHref: string;
 }
 
 const modeLabels: Record<AgentMode, string> = {
@@ -38,6 +40,7 @@ export function LabHeader({
   onToggleRun,
   onStep,
   onReset,
+  wikiHref,
 }: LabHeaderProps) {
   return (
     <header className="rounded-[28px] border border-white/12 bg-slate-950/60 p-4 shadow-panel backdrop-blur-xl">
@@ -99,6 +102,12 @@ export function LabHeader({
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
+        <Link
+          className="inline-flex items-center gap-2 rounded-full border border-accent-400/30 bg-accent-500/10 px-4 py-2 text-sm font-medium text-accent-200 transition hover:bg-accent-500/18"
+          href={wikiHref}
+        >
+          Open Wiki
+        </Link>
         <button
           className="inline-flex items-center gap-2 rounded-full bg-accent-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-400"
           onClick={onToggleRun}

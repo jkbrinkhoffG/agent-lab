@@ -22,6 +22,7 @@ import type {
   EventLogEntry,
   GenerationMetrics,
   LabConfig,
+  QLearningProgressPoint,
   ReplayRun,
   WorldState,
 } from "@/lib/sim/types";
@@ -107,6 +108,7 @@ export function useAgentLab() {
   const [generationEvaluations, setGenerationEvaluations] = useState<EvaluatedGenome[]>([]);
   const [bestGenome, setBestGenome] = useState<EvolutionGenome | null>(null);
   const [qRuntime, setQRuntime] = useState<QRuntime>(() => initializeQRuntime(DEFAULT_CONFIG.rl));
+  const [qLearningMetrics, setQLearningMetrics] = useState<QLearningProgressPoint[]>([]);
   const [selectedPresetId, setSelectedPresetId] = useState("baseline");
 
   const currentRun = useMemo(
@@ -180,6 +182,7 @@ export function useAgentLab() {
     setGenerationEvaluations([]);
     setBestGenome(null);
     setQRuntime(initializeQRuntime(nextConfig.rl));
+    setQLearningMetrics([]);
   });
 
   const recordRun = useEventCallback((label: string, mode: AgentMode, frames: ReplayRun["frames"]) => {
@@ -210,6 +213,33 @@ export function useAgentLab() {
       setBestRun((previous) =>
         !previous || run.totalReward >= previous.totalReward ? run : previous,
       );
+
+      if (mode === "q-learning") {
+        setQLearningMetrics((previous) => {
+          const reward = run.totalReward;
+          const nextEpisode = previous.length + 1;
+          const rewardWindow = [...previous.slice(-9).map((metric) => metric.reward), reward];
+          const movingAverage =
+            rewardWindow.reduce((sum, value) => sum + value, 0) /
+            Math.max(1, rewardWindow.length);
+          const lastFrame = frames[frames.length - 1];
+
+          return [
+            ...previous,
+            {
+              episode: nextEpisode,
+              reward,
+              movingAverage,
+              score: run.score,
+              steps: run.steps,
+              epsilon: trainerView === "train" ? qRuntime.epsilon : 0,
+              stateCount: Object.keys(qRuntime.qValues).length,
+              terminationReason: lastFrame?.terminationReason ?? null,
+              view: trainerView,
+            },
+          ];
+        });
+      }
     });
   });
 
@@ -406,12 +436,15 @@ export function useAgentLab() {
       return;
     }
 
+    // Depend on the full world snapshot, not just world.tick. Episodes that terminate on
+    // the first move reset from tick 0 back to tick 0, which would otherwise skip
+    // rescheduling the autoplay timer and leave the UI "running" while the sim is idle.
     const timer = window.setTimeout(() => {
       tick();
     }, config.tickMs);
 
     return () => window.clearTimeout(timer);
-  }, [config.tickMs, runStatus, tick, world.tick]);
+  }, [config.tickMs, runStatus, tick, world]);
 
   useEffect(() => {
     if (!replayPlaying || replayRun.frames.length <= 1) {
@@ -540,6 +573,7 @@ export function useAgentLab() {
     lastDecision,
     progress,
     qRuntime,
+    qLearningMetrics,
     evolutionRuntime,
     generationEvaluations,
     selectedPresetId,
